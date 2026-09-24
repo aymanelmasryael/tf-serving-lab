@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Env
+.env
+.env.*
+
+# Logs / temp
+*.log
+*.tmp
+*.temp
+.cache/
+
+# Build artifacts
+dist/
+build/
+
+# Backup of original source — local only
+*.original.html.bak
