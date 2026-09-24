@@ -1,0 +1,1636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ayman Elmasry · TF-Serving Lab — Distributed DDP Transformer Workbench</title>
+<meta name="description" content="AEL Digital Studio — interactive transformer workbench with distributed data parallelism, real-time collaboration and type-safe inference contracts.">
+<meta name="author" content="Ayman Elmasry">
+<style>
+:root{
+  --bg:#070a10; --bg2:#0c1119;
+  --panel-a:rgba(20,26,38,.92); --panel-b:rgba(12,17,27,.92);
+  --line:rgba(120,150,200,.14); --line-2:rgba(120,150,200,.28);
+  --txt:#c9d6e8; --dim:#6b7d96; --hi:#e8f2ff;
+  --cyan:#22d3ee; --violet:#a78bfa; --green:#34d399; --amber:#fbbf24; --red:#fb7185; --blue:#60a5fa;
+  --brand:#0074FF;
+  --mono:ui-monospace,'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg); color:var(--txt); overflow:hidden;
+  font:13px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  display:flex; flex-direction:column; -webkit-font-smoothing:antialiased;
+}
+.bg-grid{
+  position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(900px 500px at 12% -10%, rgba(0,116,255,.13), transparent 60%),
+    radial-gradient(800px 500px at 92% 0%, rgba(167,139,250,.10), transparent 60%),
+    radial-gradient(700px 400px at 60% 110%, rgba(52,211,153,.07), transparent 60%),
+    linear-gradient(rgba(120,150,200,.035) 1px, transparent 1px) 0 0/100% 34px,
+    linear-gradient(90deg, rgba(120,150,200,.035) 1px, transparent 1px) 0 0/34px 100%;
+}
+/* ---------- top bar ---------- */
+.topbar{
+  position:relative; z-index:2; display:flex; align-items:center; gap:16px;
+  padding:10px 18px; border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg, rgba(14,19,29,.95), rgba(9,13,20,.7));
+  backdrop-filter:blur(10px); flex-wrap:wrap;
+}
+.brand{display:flex; align-items:center; gap:12px; min-width:280px; cursor:pointer; user-select:none}
+.brand:hover .logo{box-shadow:0 0 26px rgba(0,116,255,.55), inset 0 0 14px rgba(255,255,255,.12)}
+.logo{
+  width:40px;height:40px;border-radius:10px;display:grid;place-items:center; padding:5px;
+  background:linear-gradient(140deg,#07111f,#0d1830); flex-shrink:0;
+  border:1px solid rgba(0,116,255,.35);
+  box-shadow:0 0 22px rgba(0,116,255,.35), inset 0 0 12px rgba(255,255,255,.06);
+  transition:box-shadow .3s;
+}
+.logo svg{display:block;width:100%;height:100%}
+.brand h1{margin:0;font-size:14px;letter-spacing:.01em;color:var(--hi);font-weight:650;line-height:1.25}
+.brand p{margin:0;font-size:10px;color:var(--dim);letter-spacing:.07em;text-transform:uppercase;line-height:1.35}
+.brand p b{color:var(--brand); font-weight:700}
+.status-strip{display:flex; gap:8px; flex:1; flex-wrap:wrap; justify-content:center}
+.chip{
+  display:flex; align-items:center; gap:7px; padding:5px 10px; border-radius:8px;
+  background:rgba(255,255,255,.03); border:1px solid var(--line); font-family:var(--mono); font-size:11px;
+}
+.chip b{color:var(--hi); font-weight:600}
+.chip .lab{color:var(--dim); font-size:9.5px; text-transform:uppercase; letter-spacing:.09em}
+.presence{display:flex; align-items:center; gap:10px}
+.avatars{display:flex}
+.avatar{
+  width:27px;height:27px;border-radius:50%;display:grid;place-items:center;
+  font-size:10px;font-weight:700;color:#08111c; background:var(--c,#22d3ee);
+  border:2px solid #0a0f18; margin-left:-7px; cursor:default; position:relative;
+  box-shadow:0 0 12px color-mix(in srgb, var(--c) 55%, transparent);
+}
+.avatar:first-child{margin-left:0}
+.avatar.self{outline:2px solid rgba(255,255,255,.35); outline-offset:1px}
+.solo-hint{font-size:10.5px;color:var(--dim);font-family:var(--mono);max-width:170px;line-height:1.3}
+/* ---------- layout ---------- */
+.layout{
+  position:relative; z-index:1; flex:1; min-height:0;
+  display:grid; gap:13px; padding:13px 16px 16px;
+  grid-template-columns:335px minmax(0,1.12fr) minmax(0,1fr);
+  grid-template-rows:minmax(0,1fr) 194px;
+}
+#panel-cluster{grid-area:1/1/3/2}
+#panel-train{grid-area:1/2/2/3}
+#panel-logs{grid-area:2/2/3/4}
+.col-right{grid-area:1/3/2/4; display:flex; flex-direction:column; gap:13px; min-height:0}
+.col-right .panel{flex:1 1 0; min-height:0}
+.col-right .panel:first-child{flex:1.12 1 0}
+/* ---------- panels ---------- */
+.panel{
+  display:flex; flex-direction:column; min-height:0; overflow:hidden; position:relative;
+  background:linear-gradient(180deg,var(--panel-a),var(--panel-b));
+  border:1px solid var(--line); border-radius:12px;
+  box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.03);
+  transition:box-shadow .25s, border-color .25s;
+}
+.panel.peer-focus{border-color:var(--line-2)}
+.panel-head{
+  display:flex; align-items:center; gap:9px; padding:9px 12px;
+  border-bottom:1px solid var(--line); flex-shrink:0;
+}
+.panel-head h2{
+  margin:0; font-size:11.5px; letter-spacing:.1em; text-transform:uppercase;
+  color:#a8bcd6; font-weight:650; display:flex; align-items:center; gap:8px; white-space:nowrap;
+}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot.cyan{background:var(--cyan);box-shadow:0 0 9px var(--cyan)}
+.dot.violet{background:var(--violet);box-shadow:0 0 9px var(--violet)}
+.dot.green{background:var(--green);box-shadow:0 0 9px var(--green)}
+.dot.amber{background:var(--amber);box-shadow:0 0 9px var(--amber)}
+.dot.brand{background:var(--brand);box-shadow:0 0 9px var(--brand)}
+.spacer{flex:1}
+.peer-chips{display:flex; gap:4px; align-items:center; margin-left:auto}
+.peer-chip{
+  width:17px;height:17px;border-radius:50%;display:grid;place-items:center;font-size:8px;font-weight:800;
+  color:#08111c;background:var(--c); box-shadow:0 0 8px color-mix(in srgb,var(--c) 60%,transparent);
+}
+.panel-body{
+  flex:1; min-height:0; overflow:auto; padding:11px 12px;
+  display:flex; flex-direction:column; gap:10px;
+}
+.panel-body::-webkit-scrollbar,pre::-webkit-scrollbar,textarea::-webkit-scrollbar,.log-stream::-webkit-scrollbar{width:9px;height:9px}
+.panel-body::-webkit-scrollbar-thumb,pre::-webkit-scrollbar-thumb,textarea::-webkit-scrollbar-thumb,.log-stream::-webkit-scrollbar-thumb{background:rgba(120,150,200,.18);border-radius:6px}
+.panel-body::-webkit-scrollbar-track,pre::-webkit-scrollbar-track,textarea::-webkit-scrollbar-track,.log-stream::-webkit-scrollbar-track{background:transparent}
+/* ---------- controls ---------- */
+.btn{
+  font:inherit; font-size:11px; padding:5px 10px; border-radius:7px; cursor:pointer;
+  background:rgba(255,255,255,.045); color:#c3d3e8; border:1px solid var(--line);
+  transition:.15s; white-space:nowrap;
+}
+.btn:hover{background:rgba(255,255,255,.09); border-color:var(--line-2); color:#fff}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:linear-gradient(180deg,rgba(34,211,238,.22),rgba(34,211,238,.09)); border-color:rgba(34,211,238,.45); color:#a5f3ff}
+.btn.primary:hover{background:linear-gradient(180deg,rgba(34,211,238,.34),rgba(34,211,238,.14))}
+.btn.tiny{font-size:10px; padding:3px 7px}
+.btn.wide{width:100%; justify-content:center; padding:8px}
+.btn.brand{background:linear-gradient(180deg,rgba(0,116,255,.28),rgba(0,116,255,.12)); border-color:rgba(0,116,255,.5); color:#bcd9ff}
+.btn.brand:hover{background:linear-gradient(180deg,rgba(0,116,255,.4),rgba(0,116,255,.18))}
+.btn-group{display:flex; gap:6px; align-items:center}
+select,input[type=number]{
+  font:inherit; font-size:11px; background:#0a0f18; color:#cfe0f5;
+  border:1px solid var(--line); border-radius:7px; padding:5px 7px; outline:none;
+}
+select:focus,input:focus{border-color:rgba(34,211,238,.5)}
+.subhead{
+  font-size:10px; letter-spacing:.11em; text-transform:uppercase; color:var(--dim);
+  display:flex; align-items:center; gap:7px; margin-top:2px;
+}
+.subhead::after{content:''; flex:1; height:1px; background:var(--line)}
+.field-row{display:flex; align-items:center; gap:9px; justify-content:space-between}
+.field-row label{font-size:11px; color:#9db0c8}
+.row-between{display:flex; align-items:center; justify-content:space-between; gap:8px}
+/* ---------- canvases ---------- */
+.canvas-wrap{position:relative; width:100%; border-radius:9px; overflow:hidden; background:rgba(5,8,14,.6); border:1px solid var(--line)}
+.canvas-wrap canvas{display:block; width:100%; height:100%}
+.ring-wrap{height:196px; flex-shrink:0}
+.loss-wrap{height:150px; flex-shrink:0}
+/* ---------- metrics ---------- */
+.metrics{display:grid; grid-template-columns:repeat(auto-fit,minmax(84px,1fr)); gap:7px}
+.metric{background:rgba(255,255,255,.028); border:1px solid var(--line); border-radius:8px; padding:6px 8px; min-width:0}
+.metric .k{font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.metric .v{font-family:var(--mono); font-size:15px; color:var(--hi); line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.metric .v.cyan{color:var(--cyan)} .metric .v.violet{color:var(--violet)}
+.metric .v.green{color:var(--green)} .metric .v.amber{color:var(--amber)} .metric .v.red{color:var(--red)}
+/* ---------- sliders ---------- */
+.sliders{display:grid; grid-template-columns:1fr 1fr; gap:8px 14px}
+.slider{display:flex; flex-direction:column; gap:3px}
+.slider .top{display:flex; justify-content:space-between; font-size:10.5px; color:#9db0c8}
+.slider .top b{font-family:var(--mono); color:var(--cyan); font-weight:600}
+input[type=range]{
+  -webkit-appearance:none; appearance:none; height:3px; border-radius:3px; outline:none;
+  background:linear-gradient(90deg, rgba(34,211,238,.7), rgba(167,139,250,.55));
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; width:12px;height:12px;border-radius:50%;
+  background:#0b1220; border:2px solid var(--cyan); cursor:pointer;
+  box-shadow:0 0 9px rgba(34,211,238,.75);
+}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#0b1220;border:2px solid var(--cyan);cursor:pointer}
+/* ---------- cluster ---------- */
+.kv-grid{display:grid; grid-template-columns:1fr 1fr; gap:6px}
+.kv{display:flex; justify-content:space-between; gap:8px; font-family:var(--mono); font-size:10.5px;
+  background:rgba(255,255,255,.025); border:1px solid var(--line); border-radius:7px; padding:5px 8px}
+.kv span:first-child{color:var(--dim)} .kv span:last-child{color:#d5e6fb}
+.replica-list{display:flex; flex-direction:column; gap:5px}
+.replica{
+  display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px;
+  background:rgba(255,255,255,.025); border:1px solid var(--line); border-radius:7px; padding:5px 8px;
+  font-size:10.5px; font-family:var(--mono); transition:border-color .2s;
+}
+.replica.active{border-color:rgba(34,211,238,.4)}
+.replica .rname{color:#9fb6d2; min-width:44px}
+.replica .bar{height:4px; border-radius:3px; background:rgba(120,150,200,.14); overflow:hidden}
+.replica .bar i{display:block; height:100%; background:linear-gradient(90deg,var(--cyan),var(--violet)); transition:width .12s linear}
+.replica .rloss{color:#c8dcf5; min-width:52px; text-align:right}
+.replica .stag{font-size:9px; padding:1px 5px; border-radius:4px; background:rgba(251,191,36,.13); color:var(--amber); border:1px solid rgba(251,191,36,.3)}
+.versions{display:flex; flex-direction:column; gap:6px}
+.version{display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:center; font-family:var(--mono); font-size:10.5px}
+.version .vname{color:#c8dcf5; min-width:78px}
+.version .vbar{height:5px; background:rgba(120,150,200,.14); border-radius:3px; overflow:hidden}
+.version .vbar i{display:block; height:100%; border-radius:3px}
+.version .vpct{color:var(--dim); min-width:32px; text-align:right}
+.tag{font-size:9px; padding:1px 6px; border-radius:5px; letter-spacing:.05em; text-transform:uppercase; font-weight:700}
+.tag.canary{background:rgba(251,191,36,.15); color:var(--amber); border:1px solid rgba(251,191,36,.35)}
+.tag.stable{background:rgba(52,211,153,.13); color:var(--green); border:1px solid rgba(52,211,153,.3)}
+/* ---------- editors ---------- */
+textarea{
+  width:100%; background:#070b12; color:#bcd6f0; border:1px solid var(--line); border-radius:8px;
+  padding:9px 10px; font-family:var(--mono); font-size:11.5px; line-height:1.6; resize:vertical;
+  outline:none; transition:border-color .2s; tab-size:2;
+}
+textarea:focus{border-color:rgba(34,211,238,.45); box-shadow:0 0 0 3px rgba(34,211,238,.07)}
+#contractSrc{min-height:118px}
+#requestSrc{min-height:104px}
+pre.code{
+  margin:0; background:#070b12; border:1px solid var(--line); border-radius:8px; padding:9px 10px;
+  font-family:var(--mono); font-size:11px; line-height:1.6; color:#a8c6e6;
+  white-space:pre-wrap; word-break:break-word; overflow:auto; max-height:190px;
+}
+#responseBox{color:#9fe8c9; max-height:150px}
+.c-kw{color:#c084fc} .c-str{color:#6ee7b7} .c-num{color:#fbbf24} .c-cmt{color:#4b5f78; font-style:italic}
+.badge{
+  font-size:9px; padding:2px 7px; border-radius:5px; font-family:var(--mono);
+  background:rgba(52,211,153,.13); color:var(--green); border:1px solid rgba(52,211,153,.3);
+}
+.badge.err{background:rgba(251,113,133,.13); color:var(--red); border-color:rgba(251,113,133,.35)}
+/* ---------- diagnostics ---------- */
+.diags{display:flex; flex-direction:column; gap:4px; max-height:130px; overflow:auto}
+.diag{
+  display:flex; gap:8px; align-items:flex-start; font-family:var(--mono); font-size:10.5px;
+  padding:5px 8px; border-radius:6px; border:1px solid transparent; line-height:1.45;
+}
+.diag.error{background:rgba(251,113,133,.08); border-color:rgba(251,113,133,.25); color:#ffc4cd}
+.diag.warn{background:rgba(251,191,36,.07); border-color:rgba(251,191,36,.22); color:#ffe1a3}
+.diag.ok{background:rgba(52,211,153,.07); border-color:rgba(52,211,153,.22); color:#a7f3d0}
+.diag .p{color:#7dd3fc; min-width:88px; flex-shrink:0}
+.diag .l{color:var(--dim); min-width:30px; flex-shrink:0}
+/* ---------- logs ---------- */
+.log-stream{
+  flex:1; min-height:0; overflow:auto; padding:8px 12px; font-family:var(--mono); font-size:11px;
+  display:flex; flex-direction:column; gap:2px;
+}
+.log-line{display:flex; gap:9px; line-height:1.5; white-space:nowrap}
+.log-line .t{color:#3d5069; flex-shrink:0}
+.log-line .s{color:#7c8fa8; flex-shrink:0; min-width:62px}
+.log-line .m{color:#a9c1dc; white-space:pre-wrap; word-break:break-word}
+.log-line.info .m{color:#a9c1dc}
+.log-line.ok .m{color:#86efac}
+.log-line.warn .m{color:#fcd34d}
+.log-line.err .m{color:#fda4af}
+.log-line.sys .m{color:#7dd3fc}
+.log-line .who{font-weight:700}
+/* ---------- about modal ---------- */
+.modal{
+  position:fixed; inset:0; z-index:50; display:none;
+  background:rgba(4,7,12,.78); backdrop-filter:blur(7px);
+  align-items:center; justify-content:center; padding:22px;
+}
+.modal.open{display:flex}
+.modal-card{
+  width:min(560px,100%); max-height:86vh; overflow:auto; position:relative;
+  background:linear-gradient(180deg,rgba(18,24,36,.98),rgba(10,14,22,.98));
+  border:1px solid rgba(0,116,255,.28); border-radius:16px; padding:26px 26px 22px;
+  box-shadow:0 30px 80px rgba(0,0,0,.7), 0 0 60px rgba(0,116,255,.12), inset 0 1px 0 rgba(255,255,255,.05);
+  animation:pop .22s ease-out;
+}
+@keyframes pop{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
+.modal-card::-webkit-scrollbar{width:9px}
+.modal-card::-webkit-scrollbar-thumb{background:rgba(120,150,200,.2);border-radius:6px}
+.modal-close{
+  position:absolute; top:14px; right:14px; width:28px; height:28px; border-radius:8px;
+  background:rgba(255,255,255,.05); border:1px solid var(--line); color:#9db0c8;
+  cursor:pointer; font-size:15px; line-height:1; display:grid; place-items:center;
+}
+.modal-close:hover{background:rgba(255,255,255,.1); color:#fff}
+.m-head{display:flex; gap:18px; align-items:center; margin-bottom:16px}
+.m-logo{
+  width:74px;height:74px;border-radius:16px;flex-shrink:0;padding:11px;display:grid;place-items:center;
+  background:linear-gradient(140deg,#061020,#0d1830); border:1px solid rgba(0,116,255,.4);
+  box-shadow:0 0 34px rgba(0,116,255,.35), inset 0 0 16px rgba(255,255,255,.05);
+}
+.m-logo svg{display:block;width:100%;height:100%}
+.m-head h2{margin:0 0 5px; font-size:20px; color:#f0f7ff; letter-spacing:-.01em; font-weight:700}
+.m-title{font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--brand); font-weight:700; line-height:1.5}
+.m-loc{font-size:11px; color:var(--dim); font-family:var(--mono); margin-top:4px}
+.m-body p{font-size:12.5px; line-height:1.72; color:#a9c1dc; margin:0 0 12px}
+.m-body p:last-of-type{margin-bottom:0}
+.m-divider{height:1px; background:var(--line); margin:18px 0 14px}
+.m-links{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+.m-link{
+  display:flex; align-items:center; gap:9px; padding:9px 11px; border-radius:9px;
+  background:rgba(255,255,255,.03); border:1px solid var(--line); text-decoration:none;
+  color:#c9d6e8; font-size:11.5px; font-family:var(--mono); transition:.16s; min-width:0;
+}
+.m-link:hover{background:rgba(0,116,255,.12); border-color:rgba(0,116,255,.45); color:#e8f2ff; transform:translateY(-1px)}
+.m-link .ic{
+  width:22px;height:22px;border-radius:6px;flex-shrink:0;display:grid;place-items:center;
+  background:rgba(0,116,255,.16); color:#7cb4ff; font-size:11px; font-weight:700;
+}
+.m-link span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.m-credit{
+  margin-top:16px; padding-top:13px; border-top:1px solid var(--line);
+  display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
+  font-size:10px; color:var(--dim); font-family:var(--mono); letter-spacing:.04em;
+}
+.m-credit a{color:#7cb4ff; text-decoration:none}
+.m-credit a:hover{text-decoration:underline}
+@media (max-width:1280px){
+  .layout{grid-template-columns:300px minmax(0,1fr) minmax(0,1fr)}
+  .sliders{grid-template-columns:1fr}
+}
+@media (max-width:1080px){
+  body{overflow:auto}
+  .layout{display:flex; flex-direction:column; height:auto}
+  .panel{min-height:300px}
+  .col-right{flex-direction:column}
+  #panel-logs{min-height:200px}
+  .canvas-wrap{height:180px}
+  .m-links{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<header class="topbar">
+  <div class="brand" id="brandBtn" title="About Ayman Elmasry">
+    <div class="logo" aria-label="AEL Digital Studio">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 226.77 226.77">
+        <path d="m97.19,48.59v16.2h-32.4v-16.2c0-8.94-7.25-16.2-16.2-16.2s-16.2,7.25-16.2,16.2v16.2H0v-16.2c0-5.68.98-11.13,2.76-16.2C9.44,13.52,27.44,0,48.59,0s39.16,13.52,45.83,32.4c1.79,5.07,2.76,10.52,2.76,16.2Z" fill="#ffffff"/>
+        <rect y="97.19" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="64.79" y="97.19" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="64.79" y="129.58" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect y="129.58" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="129.58" y="97.19" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="161.98" y="129.58" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="194.38" y="129.58" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="129.58" y="129.58" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="129.58" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="161.98" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="129.58" y="32.4" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="32.4" y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="64.79" y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="97.19" y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="129.58" y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="161.98" y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+        <rect x="194.38" y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Ayman Elmasry</h1>
+      <p><b>AEL</b> Digital Studio · TF-Serving Lab</p>
+    </div>
+  </div>
+
+  <div class="status-strip" id="statusStrip"></div>
+
+  <div class="presence">
+    <div class="avatars" id="avatars"></div>
+    <div class="solo-hint" id="soloHint"></div>
+    <button class="btn tiny" id="btnPeer" title="Spawn a simulated collaborator">+ demo peer</button>
+    <button class="btn tiny brand" id="btnAbout" title="About Ayman Elmasry">◈ about</button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- ============ CLUSTER ============ -->
+  <section class="panel" id="panel-cluster" data-panel="cluster">
+    <div class="panel-head">
+      <h2><span class="dot cyan"></span>Cluster Topology</h2>
+      <div class="peer-chips" data-chips="cluster"></div>
+    </div>
+    <div class="panel-body">
+      <div class="field-row">
+        <label>All-Reduce Strategy</label>
+        <select id="strategy">
+          <option value="ring">Ring · NCCL</option>
+          <option value="tree">Tree · NCCL</option>
+          <option value="flat">Flat · Param Server</option>
+        </select>
+      </div>
+      <div class="canvas-wrap ring-wrap"><canvas id="ringCanvas"></canvas></div>
+      <div class="kv-grid" id="commStats"></div>
+      <div class="subhead">Replicas <span id="replicaCountLabel" style="color:var(--dim)"></span></div>
+      <div class="replica-list" id="replicaList"></div>
+      <div class="subhead">TF Serving · Model Versions</div>
+      <div class="versions" id="versions"></div>
+    </div>
+  </section>
+
+  <!-- ============ TRAINING ============ -->
+  <section class="panel" id="panel-train" data-panel="train">
+    <div class="panel-head">
+      <h2><span class="dot violet"></span>Training Run</h2>
+      <div class="peer-chips" data-chips="train"></div>
+      <div class="spacer"></div>
+      <div class="btn-group">
+        <button id="btnPlay" class="btn primary">▶ Start</button>
+        <button id="btnStep" class="btn">⏭ Step</button>
+        <button id="btnReset" class="btn">⟲ Reset</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="metrics" id="metrics"></div>
+      <div class="canvas-wrap loss-wrap"><canvas id="lossCanvas"></canvas></div>
+      <div class="sliders">
+        <div class="slider">
+          <div class="top"><span>Replicas (data-parallel)</span><b id="vReplicas">4</b></div>
+          <input type="range" id="sReplicas" min="1" max="16" step="1" value="4">
+        </div>
+        <div class="slider">
+          <div class="top"><span>Batch / replica</span><b id="vBatch">16</b></div>
+          <input type="range" id="sBatch" min="1" max="64" step="1" value="16">
+        </div>
+        <div class="slider">
+          <div class="top"><span>Seq length</span><b id="vSeq">512</b></div>
+          <input type="range" id="sSeq" min="128" max="2048" step="128" value="512">
+        </div>
+        <div class="slider">
+          <div class="top"><span>Learning rate</span><b id="vLr">3.0e-4</b></div>
+          <input type="range" id="sLr" min="0" max="100" step="1" value="50">
+        </div>
+        <div class="slider">
+          <div class="top"><span>Grad accumulation</span><b id="vAccum">1</b></div>
+          <input type="range" id="sAccum" min="1" max="8" step="1" value="1">
+        </div>
+        <div class="slider">
+          <div class="top"><span>Global batch (derived)</span><b id="vGlobal">64</b></div>
+          <input type="range" id="sGlobal" min="0" max="0" step="1" value="0" disabled style="opacity:.35">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RIGHT COLUMN ============ -->
+  <div class="col-right">
+
+    <section class="panel" id="panel-contract" data-panel="contract">
+      <div class="panel-head">
+        <h2><span class="dot green"></span>Inference Contract</h2>
+        <div class="peer-chips" data-chips="contract"></div>
+        <div class="spacer"></div>
+        <span class="badge" id="contractBadge">compiled</span>
+      </div>
+      <div class="panel-body">
+        <textarea id="contractSrc" spellcheck="false"></textarea>
+        <div class="subhead">Generated Type Contract</div>
+        <pre class="code" id="compiledTs"></pre>
+        <div class="subhead">Compiler Diagnostics</div>
+        <div class="diags" id="contractDiags"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-infer" data-panel="infer">
+      <div class="panel-head">
+        <h2><span class="dot amber"></span>Inference Client</h2>
+        <div class="peer-chips" data-chips="infer"></div>
+        <div class="spacer"></div>
+        <div class="btn-group">
+          <button class="btn tiny" id="btnSampleOk">valid</button>
+          <button class="btn tiny" id="btnSampleBad">invalid</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <textarea id="requestSrc" spellcheck="false"></textarea>
+        <button class="btn primary wide" id="btnInfer">⚡ Validate &amp; Infer</button>
+        <div class="diags" id="requestDiags"></div>
+        <div class="subhead">Response</div>
+        <pre class="code" id="responseBox">— awaiting request —</pre>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ============ LOGS ============ -->
+  <section class="panel" id="panel-logs" data-panel="logs">
+    <div class="panel-head">
+      <h2><span class="dot green"></span>Cluster Log Stream</h2>
+      <div class="peer-chips" data-chips="logs"></div>
+      <div class="spacer"></div>
+      <button class="btn tiny" id="btnClearLogs">clear</button>
+    </div>
+    <div class="log-stream" id="logStream"></div>
+  </section>
+
+</main>
+
+<!-- ============ ABOUT MODAL ============ -->
+<div class="modal" id="aboutModal" role="dialog" aria-modal="true" aria-label="About Ayman Elmasry">
+  <div class="modal-card">
+    <button class="modal-close" id="aboutClose" aria-label="Close">✕</button>
+
+    <div class="m-head">
+      <div class="m-logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 226.77 226.77">
+          <path d="m97.19,48.59v16.2h-32.4v-16.2c0-8.94-7.25-16.2-16.2-16.2s-16.2,7.25-16.2,16.2v16.2H0v-16.2c0-5.68.98-11.13,2.76-16.2C9.44,13.52,27.44,0,48.59,0s39.16,13.52,45.83,32.4c1.79,5.07,2.76,10.52,2.76,16.2Z" fill="#ffffff"/>
+          <rect y="97.19" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="64.79" y="97.19" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="64.79" y="129.58" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect y="129.58" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="129.58" y="97.19" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="161.98" y="129.58" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="194.38" y="129.58" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="129.58" y="129.58" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="129.58" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="161.98" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="129.58" y="32.4" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="32.4" y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="64.79" y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="97.19" y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="129.58" y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="161.98" y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+          <rect x="194.38" y="194.38" width="32.4" height="32.4" fill="#0074FF"/>
+        </svg>
+      </div>
+      <div>
+        <h2>Ayman Elmasry</h2>
+        <div class="m-title">Visionary · AI Orchestrator · Brand Designer<br>Founder @ AEL Digital Studio</div>
+        <div class="m-loc">Dubai · Egypt · Kuwait</div>
+      </div>
+    </div>
+
+    <div class="m-body">
+      <p>I define the vision behind digital products and orchestrate AI to bring that vision to life.</p>
+      <p>As the founder of <strong style="color:#e8f2ff">AEL Digital Studio</strong>, I design brand systems, AI-powered experiences, and digital platforms where strategy, design, and technology work as a unified system. My work focuses on building scalable frameworks and reusable systems rather than one-off deliverables.</p>
+      <p style="color:#7f93ab">Dubai · Egypt · Kuwait — I collaborate with clients worldwide to create distinctive brands, intelligent digital products, and long-term design systems that remain consistent, maintainable, and built for growth.</p>
+    </div>
+
+    <div class="m-divider"></div>
+
+    <div class="m-links">
+      <a class="m-link" href="https://www.aymanelmasry.com/" target="_blank" rel="noopener noreferrer">
+        <span class="ic">◈</span><span>www.aymanelmasry.com</span>
+      </a>
+      <a class="m-link" href="https://aymanelmasry.me/" target="_blank" rel="noopener noreferrer">
+        <span class="ic">◇</span><span>aymanelmasry.me</span>
+      </a>
+      <a class="m-link" href="mailto:info@aymanelmasry.com">
+        <span class="ic">@</span><span>info@aymanelmasry.com</span>
+      </a>
+      <a class="m-link" href="mailto:ayman@aymanelmasry.me">
+        <span class="ic">@</span><span>ayman@aymanelmasry.me</span>
+      </a>
+    </div>
+
+    <div class="m-credit">
+      <span>AEL DIGITAL STUDIO · TF-SERVING LAB</span>
+      <span>© <span id="year"></span> Ayman Elmasry</span>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   0 · UTILITIES
+   ========================================================================= */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function fmtN(n, d = 1) {
+  if (!isFinite(n) || isNaN(n)) return "—";
+  const a = Math.abs(n);
+  if (a >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (a >= 1e6) return (n / 1e6).toFixed(d) + "M";
+  if (a >= 1e3) return (n / 1e3).toFixed(d) + "K";
+  return a < 10 ? n.toFixed(2) : n.toFixed(0);
+}
+function fmtMs(ms) {
+  if (ms < 1) return ms.toFixed(2) + "ms";
+  if (ms < 1000) return ms.toFixed(1) + "ms";
+  return (ms / 1000).toFixed(2) + "s";
+}
+
+/* =========================================================================
+   1 · IDENTITY + REAL-TIME COLLABORATION (BroadcastChannel)
+   ========================================================================= */
+const NAMES  = ["ada", "linus", "grace", "karpathy", "yann", "fei", "jeff", "ilya", "noor", "ravi", "mei", "tomas"];
+const COLORS = ["#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#fb7185", "#60a5fa", "#f472b6", "#4ade80"];
+
+const ME = {
+  id: (sessionStorage.getItem("tfs-id") || Math.random().toString(36).slice(2, 9)),
+  name: (sessionStorage.getItem("tfs-name") || pick(NAMES) + "-" + Math.floor(Math.random() * 90 + 10)),
+  color: (sessionStorage.getItem("tfs-color") || pick(COLORS)),
+  focus: null,
+  self: true
+};
+sessionStorage.setItem("tfs-id", ME.id);
+sessionStorage.setItem("tfs-name", ME.name);
+sessionStorage.setItem("tfs-color", ME.color);
+
+const peers = new Map();
+let chan = null;
+try {
+  if ("BroadcastChannel" in window) {
+    chan = new BroadcastChannel("tfs-lab");
+    chan.onmessage = e => handleMessage(e.data);
+  }
+} catch (_) { chan = null; }
+
+function post(msg) {
+  if (!chan) return;
+  try { chan.postMessage(Object.assign({ from: ME.id, name: ME.name, color: ME.color, t: Date.now() }, msg)); }
+  catch (_) {}
+}
+
+function handleMessage(m) {
+  if (!m || m.from === ME.id) return;
+  if (m.type === "bye") { peers.delete(m.from); renderPresence(); return; }
+  if (m.type === "presence" || m.type === "hello") {
+    const existing = peers.get(m.from);
+    peers.set(m.from, {
+      id: m.from, name: m.name, color: m.color, focus: m.focus || null,
+      activity: m.activity || "idle", lastSeen: Date.now(), demo: false
+    });
+    if (!existing && m.type === "hello") {
+      log("sys", `peer ${m.name} joined the session`, "collab");
+      post({ type: "presence", focus: ME.focus, activity: currentActivity() });
+    }
+    renderPresence();
+    return;
+  }
+  if (m.type === "state") { applyRemotePatch(m.patch, m.name, m.color); return; }
+  if (m.type === "log") { log(m.level || "info", m.msg, m.src || "peer", m.name, m.color); return; }
+  if (m.type === "contract") {
+    if (S.contractSrc !== m.src) {
+      S.contractSrc = m.src;
+      $("#contractSrc").value = m.src;
+      recompileContract();
+      log("sys", `${m.name} edited the inference contract`, "collab", m.name, m.color);
+    }
+  }
+}
+
+function currentActivity() {
+  if (S.running) return "training";
+  if (ME.focus === "contract") return "editing contract";
+  if (ME.focus === "infer") return "testing inference";
+  if (ME.focus === "train") return "tuning hyperparams";
+  return "observing";
+}
+
+setInterval(() => {
+  post({ type: "presence", focus: ME.focus, activity: currentActivity() });
+  const now = Date.now();
+  let dirty = false;
+  for (const [id, p] of peers) {
+    if (!p.demo && now - p.lastSeen > 5200) { peers.delete(id); dirty = true; }
+  }
+  if (dirty) renderPresence();
+}, 1600);
+
+window.addEventListener("beforeunload", () => post({ type: "bye" }));
+
+/* ---- demo peer simulation ---- */
+const DEMO_ACTIONS = [
+  () => { S.lr = clamp(S.lr * rnd(0.6, 1.5), 1e-5, 3e-3); syncSlidersFromState(); recompileTiming(); return `swept learning rate → ${S.lr.toExponential(1)}`; },
+  () => { S.batch = clamp(Math.round(S.batch * rnd(0.5, 1.8)), 1, 64); syncSlidersFromState(); recompileTiming(); return `resized micro-batch → ${S.batch}`; },
+  () => { S.replicas = clamp(S.replicas + pick([-1, 1, 1, 2]), 1, 16); syncSlidersFromState(); recompileTiming(); return `rescaled replica group → ${S.replicas} ranks`; },
+  () => `profiled step ${S.step}: ${S.lastStepMs.toFixed(1)}ms (comm ${S.lastCommMs.toFixed(1)}ms)`,
+  () => `checked contract checksum · ${contract.fields.length} fields verified`,
+  () => pick(["warming KV-cache shard 3", "rotating TF Serving model version v3-canary", "validated gradient bucket alignment", "prefetching eval batch 118"])
+];
+
+function spawnDemoPeer() {
+  const id = "demo-" + Math.random().toString(36).slice(2, 7);
+  const p = {
+    id, name: pick(NAMES) + "-" + Math.floor(Math.random() * 90 + 10),
+    color: pick(COLORS), focus: null, activity: "idle",
+    lastSeen: Date.now(), demo: true
+  };
+  peers.set(id, p);
+  log("sys", `demo collaborator ${p.name} joined`, "collab", p.name, p.color);
+  renderPresence();
+
+  const tick = () => {
+    if (!peers.has(id)) return;
+    p.focus = pick(["train", "contract", "infer", null, "cluster"]);
+    p.lastSeen = Date.now();
+    if (Math.random() < 0.45) {
+      log("info", pick(DEMO_ACTIONS)(), "collab", p.name, p.color);
+    }
+    renderPresence();
+    setTimeout(tick, rnd(2600, 6200));
+  };
+  setTimeout(tick, 1200);
+}
+
+/* =========================================================================
+   2 · STATE
+   ========================================================================= */
+const DEFAULT_CONTRACT = `contract GenerationRequest {
+  // required prompt string, 1..512 characters
+  prompt: string @min(1) @max(512)
+  max_tokens: int = 128 @range(1,1024)
+  temperature: float = 0.7 @range(0.0,2.0)
+  top_k: int? @range(1,100)
+  top_p: float? @range(0.0,1.0)
+  stream: bool = false
+  stop: string[]? @maxItems(4)
+}`;
+
+const DEFAULT_REQUEST = `{
+  "prompt": "Explain tensor parallelism in one paragraph.",
+  "max_tokens": 256,
+  "temperature": 0.9,
+  "top_k": 40,
+  "stream": true,
+  "stop": ["\\n\\n", "###"]
+}`;
+
+const BAD_REQUEST = `{
+  "prompt": "",
+  "max_tokens": 9000,
+  "temperature": "hot",
+  "top_k": 250,
+  "stream": true,
+  "stop": ["a", "b", "c", "d", "e", "f"],
+  "top_p": 3.4
+}`;
+
+const S = {
+  running: false,
+  step: 0,
+  maxSteps: 6000,
+  phase: "idle",
+  phaseP: 0,
+  phaseT: 0,
+
+  replicas: 4,
+  batch: 16,
+  seq: 512,
+  lr: 3e-4,
+  accum: 1,
+  strategy: "ring",
+
+  loss: 9.9, smoothLoss: 9.9, gradNorm: 1.0,
+  history: [],
+  tps: 0,
+  lastStepMs: 52, lastComputeMs: 47, lastCommMs: 5,
+
+  contractSrc: DEFAULT_CONTRACT,
+  requestSrc: DEFAULT_REQUEST,
+  replicaStats: []
+};
+
+let contract = { name: "Contract", fields: [], diags: [] };
+
+const MODEL = { vocab: 50257, hidden: 768, layers: 12, heads: 12, maxSeq: 1024 };
+function paramCount(m) {
+  const emb = m.vocab * m.hidden + m.maxSeq * m.hidden;
+  const perLayer = 12 * m.hidden * m.hidden + 13 * m.hidden;
+  return emb + m.layers * perLayer + 2 * m.hidden;
+}
+const PARAMS = paramCount(MODEL);
+
+/* =========================================================================
+   3 · LOGGING
+   ========================================================================= */
+const logStream = $("#logStream");
+let logCount = 0;
+function log(level, msg, src = "rank0", who = null, color = null) {
+  const el = document.createElement("div");
+  el.className = "log-line " + level;
+  const t = new Date().toTimeString().slice(0, 8);
+  const whoHtml = who ? `<span class="who" style="color:${color || "#7dd3fc"}">${esc(who)}</span> ` : "";
+  el.innerHTML = `<span class="t">${t}</span><span class="s">[${esc(src)}]</span><span class="m">${whoHtml}${esc(msg)}</span>`;
+  logStream.appendChild(el);
+  if (++logCount > 260) { logStream.removeChild(logStream.firstChild); logCount--; }
+  logStream.scrollTop = logStream.scrollHeight;
+}
+function clearLogs() { logStream.innerHTML = ""; logCount = 0; }
+
+/* =========================================================================
+   4 · CONTRACT COMPILER
+   ========================================================================= */
+const KNOWN_TYPES = ["string", "int", "float", "bool", "any", "json"];
+
+function parseContract(src) {
+  const diags = [];
+  const fields = [];
+  let name = "Contract";
+  let depth = 0;
+  const lines = src.split("\n");
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].replace(/\/\/.*$/, "").trim();
+    if (!line) continue;
+
+    if (depth === 0) {
+      const m = line.match(/^contract\s+([A-Za-z_]\w*)\s*\{$/);
+      if (!m) { diags.push({ line: i + 1, sev: "error", msg: "expected `contract <Name> {`" }); continue; }
+      name = m[1]; depth = 1; continue;
+    }
+    if (line === "}") { depth = 0; continue; }
+    const f = parseField(line, i + 1, diags);
+    if (f) fields.push(f);
+  }
+  if (depth !== 0) diags.push({ line: lines.length, sev: "error", msg: "unclosed contract block — missing `}`" });
+  if (!fields.length && !diags.length) diags.push({ line: 1, sev: "error", msg: "contract declares no fields" });
+  return { name, fields, diags };
+}
+
+function parseField(line, ln, diags) {
+  const m = line.match(/^([A-Za-z_]\w*)\s*:\s*([A-Za-z_]\w*)\s*(\[\])?\s*(\?)?\s*(.*)$/);
+  if (!m) { diags.push({ line: ln, sev: "error", msg: `cannot parse field: "${line}"` }); return null; }
+  const [, fname, base, arr, opt, rest] = m;
+  if (!KNOWN_TYPES.includes(base)) diags.push({ line: ln, sev: "error", msg: `unknown type "${base}" (expected ${KNOWN_TYPES.join(" | ")})` });
+
+  const field = { name: fname, type: base, array: !!arr, optional: !!opt, decos: [], def: undefined, line: ln };
+  let decoPart = rest;
+  const eq = rest.indexOf("=");
+  if (eq >= 0) {
+    decoPart = rest.slice(0, eq);
+    const raw = rest.slice(eq + 1).trim();
+    try { field.def = JSON.parse(raw); }
+    catch (_) {
+      if (/^-?\d+(\.\d+)?$/.test(raw)) field.def = parseFloat(raw);
+      else if (raw === "true" || raw === "false") field.def = raw === "true";
+      else if (/^".*"$/.test(raw)) field.def = raw.slice(1, -1);
+      else diags.push({ line: ln, sev: "error", msg: `invalid default value "${raw}" for ${fname}` });
+    }
+  }
+  const re = /@(\w+)(?:\(([^)]*)\))?/g;
+  let dm;
+  while ((dm = re.exec(decoPart))) {
+    const args = dm[2] ? dm[2].split(",").map(s => s.trim()).filter(Boolean) : [];
+    field.decos.push({ name: dm[1], args });
+  }
+  return field;
+}
+
+function tsType(t) {
+  return { string: "string", int: "number", float: "number", bool: "boolean", any: "unknown", json: "unknown" }[t] || "unknown";
+}
+function compileTs(c) {
+  const out = [`// compiled · ${c.name}`, `// runtime-validated at the TF Serving boundary`, `export interface ${c.name} {`];
+  for (const f of c.fields) {
+    const t = f.array ? tsType(f.type) + "[]" : tsType(f.type);
+    const opt = (f.optional || f.def !== undefined) ? "?" : "";
+    const notes = [];
+    if (f.def !== undefined) notes.push("default " + JSON.stringify(f.def));
+    for (const d of f.decos) notes.push("@" + d.name + (d.args.length ? "(" + d.args.join(", ") + ")" : ""));
+    const left = `  ${f.name}${opt}: ${t};`;
+    out.push(left.padEnd(32) + "// " + (notes.join(" · ") || "required"));
+  }
+  out.push("}");
+  return out.join("\n");
+}
+function highlightTs(src) {
+  return esc(src).replace(
+    /(\/\/[^\n]*)|(\b(?:export|interface|string|number|boolean|unknown)\b)|("(?:[^"\\]|\\.)*")|(\b\d+(?:\.\d+)?\b)/g,
+    (m, cmt, kw, str, num) => {
+      if (cmt) return `<span class="c-cmt">${cmt}</span>`;
+      if (kw) return `<span class="c-kw">${kw}</span>`;
+      if (str) return `<span class="c-str">${str}</span>`;
+      if (num) return `<span class="c-num">${num}</span>`;
+      return m;
+    }
+  );
+}
+
+function validateBody(body, c) {
+  const out = [];
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    out.push({ path: "$", sev: "error", msg: "request body must be a JSON object" });
+    return out;
+  }
+  const known = new Set(c.fields.map(f => f.name));
+  for (const k of Object.keys(body)) {
+    if (!known.has(k)) out.push({ path: "$." + k, sev: "warn", msg: `unknown field "${k}" is not part of ${c.name}` });
+  }
+  for (const f of c.fields) {
+    const p = "$." + f.name;
+    const v = body[f.name];
+
+    if (v === undefined || v === null) {
+      if (!f.optional && f.def === undefined) out.push({ path: p, sev: "error", msg: `missing required field "${f.name}"` });
+      continue;
+    }
+
+    if (f.array) {
+      if (!Array.isArray(v)) { out.push({ path: p, sev: "error", msg: `expected ${f.type}[], received ${jsType(v)}` }); continue; }
+      v.forEach((item, i) => {
+        if (!typeOk(item, f.type)) out.push({ path: `${p}[${i}]`, sev: "error", msg: `expected ${f.type}, received ${jsType(item)}` });
+      });
+    } else if (!typeOk(v, f.type)) {
+      out.push({ path: p, sev: "error", msg: `expected ${f.type}, received ${jsType(v)}` });
+      continue;
+    }
+
+    for (const d of f.decos) {
+      const args = d.args.map(a => (isNaN(parseFloat(a)) ? a.replace(/^["']|["']$/g, "") : parseFloat(a)));
+      const a0 = args[0], a1 = args[1];
+      switch (d.name) {
+        case "min":
+          if (typeof v === "string" && v.length < a0) out.push({ path: p, sev: "error", msg: `length ${v.length} < min ${a0}` });
+          else if (typeof v === "number" && v < a0) out.push({ path: p, sev: "error", msg: `value ${v} < min ${a0}` });
+          break;
+        case "max":
+          if (typeof v === "string" && v.length > a0) out.push({ path: p, sev: "error", msg: `length ${v.length} > max ${a0}` });
+          else if (typeof v === "number" && v > a0) out.push({ path: p, sev: "error", msg: `value ${v} > max ${a0}` });
+          break;
+        case "range":
+          if (typeof v === "number" && (v < a0 || v > a1))
+            out.push({ path: p, sev: "error", msg: `value ${v} outside range [${a0}, ${a1}]` });
+          break;
+        case "maxItems":
+          if (Array.isArray(v) && v.length > a0)
+            out.push({ path: p, sev: "error", msg: `array length ${v.length} > maxItems ${a0}` });
+          break;
+        case "pattern":
+          try { if (typeof v === "string" && !new RegExp(a0).test(v)) out.push({ path: p, sev: "error", msg: `"${v}" does not match /${a0}/` }); }
+          catch (_) { out.push({ path: p, sev: "warn", msg: `invalid @pattern regex "${a0}"` }); }
+          break;
+        case "enum":
+          if (!args.includes(v)) out.push({ path: p, sev: "error", msg: `value must be one of [${args.join(", ")}]` });
+          break;
+        default:
+          out.push({ path: p, sev: "warn", msg: `unknown decorator @${d.name} ignored` });
+      }
+    }
+  }
+  return out;
+}
+function jsType(v) {
+  if (Array.isArray(v)) return "array";
+  if (v === null) return "null";
+  return typeof v;
+}
+function typeOk(v, t) {
+  switch (t) {
+    case "string": return typeof v === "string";
+    case "int":    return typeof v === "number" && Number.isInteger(v);
+    case "float":  return typeof v === "number" && isFinite(v);
+    case "bool":   return typeof v === "boolean";
+    case "any":
+    case "json":   return true;
+    default:       return false;
+  }
+}
+
+/* =========================================================================
+   5 · DIAGNOSTIC RENDERING
+   ========================================================================= */
+function renderDiags(container, diags, okMsg) {
+  if (!diags.length) {
+    container.innerHTML = `<div class="diag ok"><span class="p">✓</span><span>${esc(okMsg)}</span></div>`;
+    return;
+  }
+  container.innerHTML = diags.map(d => `
+    <div class="diag ${d.sev}">
+      <span class="l">${d.line ? "L" + d.line : "•"}</span>
+      <span class="p">${esc(d.path || d.sev)}</span>
+      <span>${esc(d.msg)}</span>
+    </div>`).join("");
+}
+
+function recompileContract() {
+  contract = parseContract(S.contractSrc);
+  $("#compiledTs").innerHTML = highlightTs(compileTs(contract));
+
+  const badge = $("#contractBadge");
+  if (contract.diags.length) {
+    badge.textContent = contract.diags.length + " error" + (contract.diags.length > 1 ? "s" : "");
+    badge.classList.add("err");
+  } else {
+    badge.textContent = "compiled · " + contract.fields.length + " fields";
+    badge.classList.remove("err");
+  }
+  renderDiags($("#contractDiags"), contract.diags, `type contract "${contract.name}" compiled — ${contract.fields.length} field(s), 0 errors`);
+}
+
+/* =========================================================================
+   6 · INFERENCE
+   ========================================================================= */
+const CANNED_TEXT =
+  "Tensor parallelism splits each weight matrix across the accelerator mesh, so every rank computes a " +
+  "partial matmul and the shards are reconciled with an all-reduce before the next layer. Data parallelism " +
+  "instead replicates the whole model and partitions the global batch; gradients are averaged with a ring " +
+  "all-reduce whose cost is 2(N-1)/N times the gradient size, which is why overlap with the backward pass " +
+  "and gradient bucketing dominate scaling efficiency beyond eight replicas.";
+
+function runInference() {
+  let body;
+  try { body = JSON.parse(S.requestSrc); }
+  catch (e) {
+    renderDiags($("#requestDiags"), [{ path: "$", sev: "error", msg: "malformed JSON — " + e.message }], "");
+    $("#responseBox").textContent = "— rejected before reaching the model server —";
+    log("err", "inference rejected: malformed JSON payload", "client");
+    return;
+  }
+
+  const diags = validateBody(body, contract);
+  const errors = diags.filter(d => d.sev === "error");
+  renderDiags($("#requestDiags"), diags, `payload satisfies ${contract.name} — forwarded to TF Serving`);
+
+  if (errors.length) {
+    $("#responseBox").textContent = "— 400 Bad Request · contract violation —\n" +
+      errors.map(e => `${e.path}: ${e.msg}`).join("\n");
+    log("err", `inference rejected: ${errors.length} contract violation(s)`, "client");
+    post({ type: "log", level: "warn", msg: `contract violation (${errors.length}) on inference request`, src: "client" });
+    return;
+  }
+
+  const req = {};
+  for (const f of contract.fields) {
+    req[f.name] = (body[f.name] !== undefined && body[f.name] !== null) ? body[f.name] : f.def;
+  }
+
+  const promptTokens = Math.max(1, Math.round((req.prompt || "").length / 4));
+  const maxTok = req.max_tokens || 128;
+  const queue = rnd(1.2, 6.5) * (S.running ? 2.4 : 1);
+  const prefill = 6 + promptTokens * 0.34 * (req.stream ? 1 : 1.15);
+  const decode = maxTok * rnd(0.72, 1.05) * (1 + (S.replicas > 8 ? 0.18 : 0));
+  const total = queue + prefill + decode;
+
+  const resp = {
+    model: "ael/transformer-lm",
+    version: S.running ? "v3-canary" : "v2",
+    contract: contract.name + " ✓ validated",
+    generated_text: CANNED_TEXT.slice(0, Math.max(80, Math.min(CANNED_TEXT.length, maxTok * 2))),
+    usage: { prompt_tokens: promptTokens, completion_tokens: maxTok },
+    timings_ms: {
+      queue: +queue.toFixed(2),
+      prefill: +prefill.toFixed(2),
+      decode: +decode.toFixed(2),
+      total: +total.toFixed(2)
+    },
+    sampling: { temperature: req.temperature, top_k: req.top_k ?? null, top_p: req.top_p ?? null }
+  };
+
+  $("#responseBox").textContent = JSON.stringify(resp, null, 2);
+  log("ok", `200 OK · ${maxTok} tokens in ${total.toFixed(1)}ms (${(maxTok / (decode / 1000)).toFixed(1)} tok/s)`, "serving");
+  post({ type: "log", level: "info", msg: `ran inference on ${contract.name} · ${total.toFixed(1)}ms`, src: "serving" });
+}
+
+/* =========================================================================
+   7 · SIMULATION ENGINE
+   ========================================================================= */
+function recompileTiming() {
+  const N = S.replicas;
+  const tokensPerReplica = S.batch * S.seq / S.accum;
+
+  const flops = 6 * PARAMS * tokensPerReplica;
+  const computeMs = (flops / (312e12)) * 1000 * 2.6;
+
+  const gradBytes = PARAMS * 2 * 1.02;
+  const bw = 90e9;
+  const factor = S.strategy === "ring" ? 2 * (N - 1) / N
+               : S.strategy === "tree" ? Math.max(0.25, Math.log2(Math.max(2, N)) / N * 2.2)
+               : (N - 1) / N * 1.35;
+  const commMs = N > 1 ? (gradBytes * factor) / bw * 1000 : 0;
+
+  S.lastComputeMs = computeMs;
+  S.lastCommMs = commMs;
+  S.lastStepMs = computeMs + commMs + 2.4;
+
+  const globalBatch = S.batch * N * S.accum;
+  S.tps = (globalBatch * S.seq) / (S.lastStepMs / 1000);
+}
+
+function advance(dt) {
+  S.phaseT += dt;
+  if (S.phaseT >= S.lastStepMs) {
+    S.phaseT = S.phaseT % S.lastStepMs;
+    completeStep();
+  }
+  const p = S.phaseT / S.lastStepMs;
+  S.phaseP = p;
+  S.phase = p < 0.55 ? "compute" : p < 0.86 ? "allreduce" : "update";
+}
+
+let stepCounter = 0;
+function completeStep() {
+  S.step++;
+  stepCounter++;
+
+  const lrFactor = S.lr / 3e-4;
+  const decay = 900 / Math.pow(lrFactor, 0.85);
+  let base = 1.42 + 8.6 * Math.exp(-S.step / decay);
+
+  if (lrFactor > 3.6) base += (lrFactor - 3.6) * 0.55 * (1 + Math.sin(S.step / 7));
+
+  const noiseAmp = 0.055 * Math.sqrt(lrFactor);
+  const loss = Math.max(0.4, base + rnd(-noiseAmp, noiseAmp));
+  S.loss = loss;
+  S.smoothLoss = S.smoothLoss * 0.85 + loss * 0.15;
+  S.gradNorm = Math.max(0.05, 1.15 * Math.exp(-S.step / 1400) + rnd(-0.08, 0.08));
+
+  S.history.push({ step: S.step, loss });
+  if (S.history.length > 320) S.history.shift();
+
+  const N = S.replicas;
+  S.replicaStats = [];
+  for (let i = 0; i < N; i++) {
+    const straggler = i === N - 1 && N > 2 && (S.step % 17 < 4);
+    S.replicaStats.push({
+      rank: i,
+      loss: loss + rnd(-0.045, 0.045) + (straggler ? 0.09 : 0),
+      gradNorm: S.gradNorm * rnd(0.9, 1.1),
+      util: clamp(rnd(88, 99) - (straggler ? 22 : 0), 40, 99.5),
+      straggler
+    });
+  }
+
+  if (stepCounter % 20 === 0) {
+    log("info",
+      `step ${S.step} · loss ${loss.toFixed(4)} · gn ${S.gradNorm.toFixed(3)} · ${fmtMs(S.lastStepMs)}/step · ${fmtN(S.tps)} tok/s`,
+      "ddp");
+  }
+  if (lrFactor > 3.6 && S.step % 25 === 0) {
+    log("warn", `loss instability detected — LR ${S.lr.toExponential(1)} exceeds stable band for this model`, "optimizer");
+  }
+  if (S.step % 250 === 0 && S.step > 0) {
+    log("sys", `checkpoint written to gs://ael/ckpt/step-${S.step} (${fmtN(PARAMS)} params)`, "ckpt");
+  }
+  if (S.step >= S.maxSteps) {
+    S.running = false;
+    $("#btnPlay").textContent = "▶ Start";
+    log("ok", `run complete at step ${S.step} · final loss ${S.smoothLoss.toFixed(4)}`, "ddp");
+  }
+}
+
+/* =========================================================================
+   8 · CANVAS RENDERING
+   ========================================================================= */
+function fitCanvas(cv) {
+  const r = cv.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+  if (cv.width !== w * dpr || cv.height !== h * dpr) {
+    cv.width = w * dpr; cv.height = h * dpr;
+  }
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w, h };
+}
+
+const ringCv = $("#ringCanvas");
+const lossCv = $("#lossCanvas");
+
+function drawRing() {
+  const { ctx, w, h } = fitCanvas(ringCv);
+  ctx.clearRect(0, 0, w, h);
+
+  const N = S.replicas;
+  const cx = w / 2, cy = h / 2;
+  const R = Math.min(w, h) * 0.32;
+
+  const coreR = Math.max(14, R * 0.34);
+  const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, coreR);
+  const active = S.phase === "allreduce";
+  grad.addColorStop(0, active ? "rgba(167,139,250,.42)" : "rgba(0,116,255,.22)");
+  grad.addColorStop(1, "rgba(10,15,25,0)");
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(cx, cy, coreR, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(160,190,220,.55)";
+  ctx.font = "600 9px ui-monospace, monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(S.strategy === "flat" ? "PS" : "NCCL", cx, cy + 3);
+
+  const nodes = [];
+  for (let i = 0; i < N; i++) {
+    const a = -Math.PI / 2 + i * 2 * Math.PI / N;
+    nodes.push({ x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R, a });
+  }
+  ctx.lineWidth = 1.4;
+  for (let i = 0; i < N; i++) {
+    const a = nodes[i], b = nodes[(i + 1) % N];
+    const g = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+    const hot = active ? 0.65 : 0.18;
+    g.addColorStop(0, `rgba(0,116,255,${hot})`);
+    g.addColorStop(1, `rgba(167,139,250,${hot})`);
+    ctx.strokeStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.quadraticCurveTo(cx, cy, b.x, b.y);
+    ctx.stroke();
+  }
+
+  if (active && N > 1) {
+    const p = (S.phaseP - 0.55) / 0.31;
+    const gather = p > 0.5;
+    const u = (gather ? (p - 0.5) * 2 : p * 2);
+    for (let i = 0; i < N; i++) {
+      const t = (i / N + u) % 1;
+      const seg = t * N;
+      const idx = Math.floor(seg) % N;
+      const local = seg - Math.floor(seg);
+      const a = nodes[idx], b = nodes[(idx + 1) % N];
+      const mx = (a.x + b.x) / 2 * 0.35 + cx * 0.65;
+      const my = (a.y + b.y) / 2 * 0.35 + cy * 0.65;
+      const x = (1 - local) * (1 - local) * a.x + 2 * (1 - local) * local * mx + local * local * b.x;
+      const y = (1 - local) * (1 - local) * a.y + 2 * (1 - local) * local * my + local * local * b.y;
+      ctx.beginPath();
+      ctx.arc(x, y, 3.1, 0, Math.PI * 2);
+      ctx.fillStyle = gather ? "#a78bfa" : "#0074FF";
+      ctx.shadowColor = gather ? "#a78bfa" : "#0074FF";
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  for (let i = 0; i < N; i++) {
+    const n = nodes[i];
+    const stat = S.replicaStats[i];
+    const pulse = S.phase === "compute" ? 0.5 + 0.5 * Math.sin(Date.now() / 180 + i) : 0.25;
+    const busy = S.running || S.phase !== "idle";
+
+    ctx.beginPath(); ctx.arc(n.x, n.y, 11, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(8,13,22,.95)"; ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = stat && stat.straggler ? "#fbbf24"
+      : busy ? `rgba(0,116,255,${0.55 + pulse * 0.45})` : "rgba(120,150,200,.35)";
+    ctx.stroke();
+
+    if (busy) {
+      ctx.beginPath(); ctx.arc(n.x, n.y, 15 + pulse * 3, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(0,116,255,${0.16 * (1 - pulse)})`;
+      ctx.lineWidth = 1.5; ctx.stroke();
+    }
+
+    ctx.fillStyle = "rgba(200,225,250,.92)";
+    ctx.font = "700 9px ui-monospace, monospace";
+    ctx.fillText("r" + i, n.x, n.y + 3);
+  }
+
+  const labels = { idle: "idle", compute: "forward + backward", allreduce: "all-reduce (gradients)", update: "optimizer step" };
+  ctx.textAlign = "left";
+  ctx.font = "600 9.5px ui-monospace, monospace";
+  ctx.fillStyle = "rgba(140,170,205,.75)";
+  ctx.fillText((labels[S.phase] || "").toUpperCase(), 9, h - 8);
+  ctx.textAlign = "right";
+  ctx.fillStyle = "rgba(0,116,255,.85)";
+  ctx.fillText(`${N} × DDP`, w - 9, h - 8);
+}
+
+function drawLoss() {
+  const { ctx, w, h } = fitCanvas(lossCv);
+  ctx.clearRect(0, 0, w, h);
+
+  const pad = { l: 38, r: 10, t: 12, b: 20 };
+  const W = w - pad.l - pad.r, H = h - pad.t - pad.b;
+  if (W <= 0 || H <= 0) return;
+
+  const data = S.history;
+  if (data.length < 2) {
+    ctx.fillStyle = "rgba(107,125,150,.6)";
+    ctx.font = "11px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("awaiting training steps…", w / 2, h / 2);
+    return;
+  }
+
+  const ys = data.map(d => d.loss);
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  if (hi - lo < 0.6) { hi += 0.3; lo -= 0.3; }
+  const padY = (hi - lo) * 0.12;
+  const y0 = Math.max(0, lo - padY), y1 = hi + padY;
+
+  const X = i => pad.l + (i / (data.length - 1)) * W;
+  const Y = v => pad.t + H - ((v - y0) / (y1 - y0)) * H;
+
+  ctx.strokeStyle = "rgba(120,150,200,.10)";
+  ctx.lineWidth = 1;
+  ctx.font = "9px ui-monospace, monospace";
+  ctx.fillStyle = "rgba(107,125,150,.85)";
+  ctx.textAlign = "right";
+  for (let i = 0; i <= 4; i++) {
+    const v = y0 + (i / 4) * (y1 - y0);
+    const y = Y(v);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + W, y); ctx.stroke();
+    ctx.fillText(v.toFixed(2), pad.l - 6, y + 3);
+  }
+
+  const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + H);
+  grad.addColorStop(0, "rgba(0,116,255,.24)");
+  grad.addColorStop(1, "rgba(0,116,255,0)");
+  ctx.beginPath();
+  ctx.moveTo(X(0), pad.t + H);
+  data.forEach((d, i) => ctx.lineTo(X(i), Y(d.loss)));
+  ctx.lineTo(X(data.length - 1), pad.t + H);
+  ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+
+  ctx.beginPath();
+  data.forEach((d, i) => i ? ctx.lineTo(X(i), Y(d.loss)) : ctx.moveTo(X(i), Y(d.loss)));
+  ctx.strokeStyle = "rgba(0,116,255,.38)";
+  ctx.lineWidth = 1; ctx.stroke();
+
+  let ema = data[0].loss;
+  ctx.beginPath();
+  data.forEach((d, i) => {
+    ema = ema * 0.88 + d.loss * 0.12;
+    i ? ctx.lineTo(X(i), Y(ema)) : ctx.moveTo(X(i), Y(ema));
+  });
+  ctx.strokeStyle = "#3b9bff";
+  ctx.lineWidth = 1.9;
+  ctx.shadowColor = "rgba(0,116,255,.7)"; ctx.shadowBlur = 8;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  const lx = X(data.length - 1), ly = Y(data[data.length - 1].loss);
+  ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+  ctx.fillStyle = "#9ecbff"; ctx.fill();
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(107,125,150,.85)";
+  ctx.font = "9px ui-monospace, monospace";
+  ctx.fillText("loss", pad.l, pad.t - 2);
+  ctx.textAlign = "right";
+  ctx.fillText("step " + data[data.length - 1].step, pad.l + W, h - 6);
+}
+
+/* =========================================================================
+   9 · DOM RENDERING
+   ========================================================================= */
+const AVATAR_INITIALS = n => n.replace(/[^a-z0-9]/gi, "").slice(0, 2).toUpperCase();
+
+function renderPresence() {
+  const list = Array.from(peers.values());
+  const all = [ME, ...list];
+  $("#avatars").innerHTML = all.map(p => `
+    <div class="avatar ${p === ME ? "self" : ""}" style="--c:${p.color}"
+         title="${esc(p.name)}${p === ME ? " (you)" : ""} · ${esc(p.focus || p.activity || "idle")}">
+      ${AVATAR_INITIALS(p.name)}
+    </div>`).join("");
+
+  $("#soloHint").textContent = list.length
+    ? `${list.length} collaborator${list.length > 1 ? "s" : ""} live`
+    : "solo session — open a 2nd tab to collaborate live";
+
+  $$("[data-chips]").forEach(el => {
+    const key = el.dataset.chips;
+    const who = list.filter(p => p.focus === key);
+    el.innerHTML = who.map(p =>
+      `<div class="peer-chip" style="--c:${p.color}" title="${esc(p.name)} is viewing">${AVATAR_INITIALS(p.name)}</div>`
+    ).join("");
+    const panel = el.closest(".panel");
+    if (panel) panel.classList.toggle("peer-focus", who.length > 0);
+  });
+}
+
+function renderStatusStrip() {
+  const globalBatch = S.batch * S.replicas * S.accum;
+  const eff = S.lastComputeMs + S.lastCommMs > 0
+    ? (S.lastComputeMs / (S.lastComputeMs + S.lastCommMs)) * 100 : 100;
+  $("#statusStrip").innerHTML = `
+    <div class="chip"><span class="lab">step</span><b>${S.step.toLocaleString()}</b></div>
+    <div class="chip"><span class="lab">loss</span><b style="color:#3b9bff">${S.smoothLoss.toFixed(4)}</b></div>
+    <div class="chip"><span class="lab">throughput</span><b style="color:#34d399">${fmtN(S.tps)} tok/s</b></div>
+    <div class="chip"><span class="lab">global batch</span><b>${globalBatch}</b></div>
+    <div class="chip"><span class="lab">params</span><b>${fmtN(PARAMS)}</b></div>
+    <div class="chip"><span class="lab">scaling eff</span><b style="color:${eff > 80 ? "#34d399" : eff > 55 ? "#fbbf24" : "#fb7185"}">${eff.toFixed(1)}%</b></div>
+  `;
+}
+
+function renderMetrics() {
+  const perplexity = Math.exp(Math.min(20, S.smoothLoss));
+  const eta = S.running ? ((S.maxSteps - S.step) * S.lastStepMs / 1000) : 0;
+  const globalBatch = S.batch * S.replicas * S.accum;
+  const tokensSeen = S.step * globalBatch * S.seq;
+
+  $("#metrics").innerHTML = `
+    <div class="metric"><div class="k">step</div><div class="v">${S.step.toLocaleString()}<span style="color:var(--dim);font-size:10px">/${S.maxSteps}</span></div></div>
+    <div class="metric"><div class="k">loss (ema)</div><div class="v cyan">${S.smoothLoss.toFixed(4)}</div></div>
+    <div class="metric"><div class="k">perplexity</div><div class="v violet">${perplexity.toFixed(1)}</div></div>
+    <div class="metric"><div class="k">grad norm</div><div class="v ${S.gradNorm > 2 ? "amber" : "green"}">${S.gradNorm.toFixed(3)}</div></div>
+    <div class="metric"><div class="k">step time</div><div class="v">${fmtMs(S.lastStepMs)}</div></div>
+    <div class="metric"><div class="k">tokens/s</div><div class="v green">${fmtN(S.tps)}</div></div>
+    <div class="metric"><div class="k">tokens seen</div><div class="v">${fmtN(tokensSeen)}</div></div>
+    <div class="metric"><div class="k">eta</div><div class="v amber">${S.running ? fmtMs(eta * 1000) : "—"}</div></div>
+  `;
+}
+
+function renderCluster() {
+  const N = S.replicas;
+  const gradBytes = PARAMS * 2 * 1.02;
+  const eff = S.lastComputeMs + S.lastCommMs > 0
+    ? (S.lastComputeMs / (S.lastComputeMs + S.lastCommMs)) * 100 : 100;
+  const idealTps = S.tps / (eff / 100 || 1);
+
+  $("#commStats").innerHTML = `
+    <div class="kv"><span>grad / step</span><span>${(gradBytes / 1e6).toFixed(0)} MB</span></div>
+    <div class="kv"><span>compute</span><span>${fmtMs(S.lastComputeMs)}</span></div>
+    <div class="kv"><span>all-reduce</span><span>${fmtMs(S.lastCommMs)}</span></div>
+    <div class="kv"><span>scaling eff</span><span style="color:${eff > 80 ? "#34d399" : eff > 55 ? "#fbbf24" : "#fb7185"}">${eff.toFixed(1)}%</span></div>
+    <div class="kv"><span>ideal tps</span><span>${fmtN(idealTps)}</span></div>
+    <div class="kv"><span>strategy</span><span>${S.strategy}</span></div>
+  `;
+
+  $("#replicaCountLabel").textContent = `· ${N} rank${N > 1 ? "s" : ""}`;
+
+  const stats = S.replicaStats.length === N ? S.replicaStats
+    : Array.from({ length: N }, (_, i) => ({ rank: i, loss: S.loss, gradNorm: S.gradNorm, util: 0, straggler: false }));
+
+  $("#replicaList").innerHTML = stats.map(r => `
+    <div class="replica ${S.running ? "active" : ""}">
+      <span class="rname">rank ${r.rank}</span>
+      <span class="bar"><i style="width:${r.util.toFixed(1)}%"></i></span>
+      <span class="rloss">${r.loss.toFixed(4)}</span>
+      ${r.straggler ? '<span class="stag">slow</span>' : ""}
+    </div>
+  `).join("");
+
+  const versions = [
+    { v: "v3-canary", pct: 10, status: "canary", color: "#fbbf24" },
+    { v: "v2", pct: 25, status: "stable", color: "#34d399" },
+    { v: "v1", pct: 65, status: "stable", color: "#60a5fa" }
+  ];
+  $("#versions").innerHTML = versions.map(x => `
+    <div class="version">
+      <span class="vname">${x.v} <span class="tag ${x.status}">${x.status}</span></span>
+      <span class="vbar"><i style="width:${x.pct}%;background:${x.color}"></i></span>
+      <span class="vpct">${x.pct}%</span>
+    </div>
+  `).join("");
+}
+
+/* =========================================================================
+   10 · UI WIRING
+   ========================================================================= */
+function syncSlidersFromState() {
+  $("#sReplicas").value = S.replicas; $("#vReplicas").textContent = S.replicas;
+  $("#sBatch").value = S.batch;       $("#vBatch").textContent = S.batch;
+  $("#sSeq").value = S.seq;           $("#vSeq").textContent = S.seq;
+  $("#sAccum").value = S.accum;       $("#vAccum").textContent = S.accum;
+  $("#vLr").textContent = S.lr.toExponential(1);
+  $("#sLr").value = Math.round((Math.log10(S.lr) + 5) / 4 * 100);
+  $("#vGlobal").textContent = S.batch * S.replicas * S.accum;
+  $("#strategy").value = S.strategy;
+}
+
+$("#sLr").addEventListener("input", e => {
+  const t = +e.target.value / 100;
+  S.lr = Math.pow(10, -5 + t * 4);
+  $("#vLr").textContent = S.lr.toExponential(1);
+  recompileTiming();
+  broadcastPatch({ lr: S.lr });
+});
+
+$("#sReplicas").addEventListener("input", e => {
+  S.replicas = +e.target.value;
+  $("#vReplicas").textContent = S.replicas;
+  $("#vGlobal").textContent = S.batch * S.replicas * S.accum;
+  S.replicaStats = [];
+  recompileTiming();
+  broadcastPatch({ replicas: S.replicas });
+  log("sys", `replica group rescaled → ${S.replicas} ranks (global batch ${S.batch * S.replicas * S.accum})`, "ddp");
+});
+
+$("#sBatch").addEventListener("input", e => {
+  S.batch = +e.target.value;
+  $("#vBatch").textContent = S.batch;
+  $("#vGlobal").textContent = S.batch * S.replicas * S.accum;
+  recompileTiming();
+  broadcastPatch({ batch: S.batch });
+});
+
+$("#sSeq").addEventListener("input", e => {
+  S.seq = +e.target.value;
+  $("#vSeq").textContent = S.seq;
+  recompileTiming();
+  broadcastPatch({ seq: S.seq });
+});
+
+$("#sAccum").addEventListener("input", e => {
+  S.accum = +e.target.value;
+  $("#vAccum").textContent = S.accum;
+  $("#vGlobal").textContent = S.batch * S.replicas * S.accum;
+  recompileTiming();
+  broadcastPatch({ accum: S.accum });
+});
+
+$("#strategy").addEventListener("change", e => {
+  S.strategy = e.target.value;
+  recompileTiming();
+  log("sys", `all-reduce backend switched → ${S.strategy}`, "nccl");
+  broadcastPatch({ strategy: S.strategy });
+});
+
+function broadcastPatch(patch) { post({ type: "state", patch }); }
+function applyRemotePatch(patch, who, color) {
+  Object.assign(S, patch);
+  S.replicaStats = [];
+  syncSlidersFromState();
+  recompileTiming();
+  const pretty = Object.entries(patch).map(([k, v]) =>
+    `${k}=${typeof v === "number" && v < 1e-2 ? v.toExponential(1) : v}`).join(", ");
+  log("sys", `${who} applied ${pretty}`, "collab", who, color);
+}
+
+$("#btnPlay").addEventListener("click", () => {
+  S.running = !S.running;
+  $("#btnPlay").textContent = S.running ? "⏸ Pause" : "▶ Start";
+  if (S.running) {
+    log("ok", `training resumed at step ${S.step} · ${S.replicas}×DDP · global batch ${S.batch * S.replicas * S.accum}`, "ddp");
+    post({ type: "log", level: "ok", msg: `started training run at step ${S.step}`, src: "ddp" });
+  } else {
+    log("warn", `training paused at step ${S.step}`, "ddp");
+  }
+});
+
+$("#btnStep").addEventListener("click", () => {
+  completeStep();
+  log("info", `single optimizer step executed (step ${S.step})`, "ddp");
+});
+
+$("#btnReset").addEventListener("click", () => {
+  S.step = 0; S.loss = 9.9; S.smoothLoss = 9.9; S.gradNorm = 1.0;
+  S.history = []; S.phaseT = 0; S.phase = "idle"; S.running = false;
+  S.replicaStats = [];
+  $("#btnPlay").textContent = "▶ Start";
+  log("warn", "training state reset — weights re-initialised from seed 1337", "ddp");
+});
+
+$("#btnClearLogs").addEventListener("click", clearLogs);
+$("#btnPeer").addEventListener("click", spawnDemoPeer);
+
+$("#contractSrc").addEventListener("input", e => {
+  S.contractSrc = e.target.value;
+  recompileContract();
+  debouncedBroadcastContract();
+});
+let contractBroadcastTimer = null;
+function debouncedBroadcastContract() {
+  clearTimeout(contractBroadcastTimer);
+  contractBroadcastTimer = setTimeout(() => post({ type: "contract", src: S.contractSrc }), 420);
+}
+
+$("#requestSrc").addEventListener("input", e => { S.requestSrc = e.target.value; });
+
+$("#btnSampleOk").addEventListener("click", () => {
+  S.requestSrc = DEFAULT_REQUEST;
+  $("#requestSrc").value = DEFAULT_REQUEST;
+  $("#requestDiags").innerHTML = "";
+});
+
+$("#btnSampleBad").addEventListener("click", () => {
+  S.requestSrc = BAD_REQUEST;
+  $("#requestSrc").value = BAD_REQUEST;
+  log("warn", "loaded deliberately invalid payload to exercise the contract validator", "client");
+});
+
+$("#btnInfer").addEventListener("click", runInference);
+
+document.addEventListener("focusin", e => {
+  const panel = e.target.closest("[data-panel]");
+  const key = panel ? panel.dataset.panel : null;
+  if (key !== ME.focus) {
+    ME.focus = key;
+    post({ type: "presence", focus: ME.focus, activity: currentActivity() });
+    renderPresence();
+  }
+});
+document.addEventListener("focusout", () => {
+  setTimeout(() => {
+    if (!document.activeElement || !document.activeElement.closest("[data-panel]")) {
+      ME.focus = null;
+      post({ type: "presence", focus: null, activity: currentActivity() });
+      renderPresence();
+    }
+  }, 60);
+});
+
+/* ---------- about modal ---------- */
+const aboutModal = $("#aboutModal");
+function openAbout() { aboutModal.classList.add("open"); }
+function closeAbout() { aboutModal.classList.remove("open"); }
+$("#btnAbout").addEventListener("click", openAbout);
+$("#brandBtn").addEventListener("click", openAbout);
+$("#aboutClose").addEventListener("click", closeAbout);
+aboutModal.addEventListener("click", e => { if (e.target === aboutModal) closeAbout(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeAbout(); });
+$("#year").textContent = new Date().getFullYear();
+
+/* =========================================================================
+   11 · MAIN LOOP + INIT
+   ========================================================================= */
+let lastT = performance.now();
+let slowAccum = 0;
+
+function loop(now) {
+  const dt = Math.min(120, now - lastT);
+  lastT = now;
+
+  if (S.running) advance(dt);
+
+  drawRing();
+  drawLoss();
+
+  slowAccum += dt;
+  if (slowAccum > 130) {
+    slowAccum = 0;
+    renderStatusStrip();
+    renderMetrics();
+    renderCluster();
+  }
+  requestAnimationFrame(loop);
+}
+
+function init() {
+  $("#contractSrc").value = S.contractSrc;
+  $("#requestSrc").value = S.requestSrc;
+
+  recompileContract();
+  syncSlidersFromState();
+  recompileTiming();
+  renderPresence();
+  renderStatusStrip();
+  renderMetrics();
+  renderCluster();
+
+  log("sys", "AEL Digital Studio · TF-Serving Lab bootstrapped · gRPC :8500 · REST :8501", "serving");
+  log("ok", `loaded ael/transformer-lm (${fmtN(PARAMS)} params · ${MODEL.layers}L/${MODEL.hidden}H/${MODEL.heads} heads)`, "serving");
+  log("info", `data-parallel group ready with ${S.replicas} replicas · strategy=${S.strategy}`, "ddp");
+  log("sys", "BroadcastChannel collaboration bus online — open a second tab to co-edit the run", "collab");
+  log("sys", "workbench by Ayman Elmasry · aymanelmasry.com", "brand");
+
+  post({ type: "hello", focus: null, activity: "observing" });
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener("resize", () => { drawRing(); drawLoss(); });
+init();
+</script>
+</body>
+</html>
