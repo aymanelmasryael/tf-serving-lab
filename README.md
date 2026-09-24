@@ -1,290 +1,209 @@
-# AEL TF-Serving Lab
+<div align="center">
 
-**Interactive browser-based simulation workbench for distributed Transformer experimentation, TensorFlow Serving workflows, real-time collaboration, and type-safe inference contracts.**
+<img src="assets/logo.svg" alt="AEL Digital Studio" width="120" height="120">
 
-![License: MIT](https://img.shields.io/badge/License-MIT-0074FF.svg)
-![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)
-![CSS3](https://img.shields.io/badge/CSS3-1572B6?logo=css3&logoColor=white)
-![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
-![TensorFlow Serving](https://img.shields.io/badge/TF%20Serving-FF6F00?logo=tensorflow&logoColor=white)
+# ⚡ AEL TF-Serving Lab
+
+**Interactive browser-based simulation workbench for distributed Transformer experimentation,
+TensorFlow Serving workflows, real-time collaboration, and type-safe inference contracts.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-0074FF.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/HTML)
+[![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/CSS)
+[![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+[![TensorFlow Serving](https://img.shields.io/badge/TF%20Serving-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white)](https://www.tensorflow.org/tfx/guide/serving)
+
+[**Live Demo**](https://aymanelmasryael.github.io/tf-serving-lab/) ·
+[**Documentation**](docs/) ·
+[**Report Bug**](https://github.com/aymanelmasryael/tf-serving-lab/issues)
+
+</div>
 
 ---
 
-## Project Overview
+## 📖 Overview
 
-**AEL TF-Serving Lab** is an **interactive, dependency-free** workbench that simulates end-to-end transformer training under distributed data parallelism, deploys the model via TensorFlow Serving semantics, and enforces inference request contracts through a custom type-safe DSL — all with live multi-user collaboration.
+**AEL TF-Serving Lab** is a dependency-free interactive workbench that simulates
+end-to-end transformer training under **Distributed Data Parallelism (DDP)**,
+deploys the model via **TensorFlow Serving** semantics, and enforces inference
+request contracts through a custom **type-safe DSL** — all with **live multi-user
+collaboration** via the BroadcastChannel API.
 
-This is an **architectural prototype and simulation**. It runs entirely in the browser with zero external dependencies. No real TensorFlow, no real GPU computation, no actual distributed training cluster. Everything is simulated with mathematically grounded approximations.
+> This is an **architectural prototype and simulation**. It runs entirely in the
+> browser with zero external dependencies.
 
 ---
 
-## Core Capabilities
+## ✨ Features
 
-### Distributed Training Simulation (IMPLEMENTED / SIMULATED)
-- **Three All-Reduce strategies**: Ring (NCCL), Tree (NCCL), Flat (Parameter Server)
-- **Real-time metrics**: Loss, Perplexity, Gradient Norm, Tokens/sec, Scaling Efficiency
-- **Straggler detection**: Simulates slow replicas and their impact on step time
-- **Learning-rate instability**: Loss curve diverges when LR exceeds stable band
-- **Gradient accumulation**: Multi-step gradient accumulation before optimizer update
-- **Live loss chart**: Real-time loss visualization with EMA smoothing
+### 🧠 Distributed Training Simulation
+- **3 All-Reduce strategies**: Ring (NCCL), Tree (NCCL), Flat (Parameter Server)
+- Real-time metrics: Loss, Perplexity, Grad Norm, Tokens/sec, Scaling Efficiency
+- Straggler detection and LR instability modeling
+- Live loss chart with EMA smoothing
 
-### Interactive Control Panel (IMPLEMENTED)
-| Control | Range | Impact |
-|---------|-------|--------|
-| Replicas | 1→16 | Number of parallel DDP ranks |
-| Batch / replica | 1→64 | Micro-batch size per rank |
-| Seq length | 128→2048 | Transformer context window |
-| Learning rate | 1e-5→1e-1 (log) | Optimizer step size |
-| Grad accumulation | 1→8 | Steps before weight update |
-
-### Type-Safe Contract DSL (IMPLEMENTED)
-- Custom DSL for defining inference request contracts
-- Parser → TypeScript interface generation → Runtime validation
+### 📜 Type-Safe Contract DSL
+- Custom DSL → TypeScript interface generation → Runtime validation
 - Decorators: `@min`, `@max`, `@range`, `@pattern`, `@enum`, `@maxItems`
-- Optional fields with defaults (`?`, `= default`)
-- Array types (`string[]`, `int[]`, etc.)
-- Live compiler diagnostics with line numbers
+- Optional fields, defaults, array types, live compiler diagnostics
 
-### Inference Simulation (IMPLEMENTED / SIMULATED)
+### 🔌 Inference Client
 - Contract-validated request/response cycle
-- Simulated queue, prefill, decode timings
-- Model version routing (canary/stable)
-- Token usage reporting
+- Simulated queue / prefill / decode timings
+- Model version routing (canary / stable)
 - 400 Bad Request on contract violations
 
-### Real-Time Collaboration (IMPLEMENTED)
-- **BroadcastChannel** API for cross-tab communication
-- Peer presence with avatars and focus indicators
-- Shared state: contract edits, hyperparameter changes, logs
+### 👥 Real-Time Collaboration
+- BroadcastChannel API for cross-tab sync
+- Peer presence, focus indicators, shared state
 - Demo peer simulation for single-user testing
 
-### TensorFlow Serving Semantics (SIMULATED)
-- Model version traffic splitting (v1/v2/v3-canary)
-- gRPC :8500 / REST :8501 endpoints (simulated)
-- Request contract validation at serving boundary
-
 ---
 
-## Architecture
+## 🚀 Quick Start
 
-```
-Browser UI (index.html)
-    ↓
-Application State (src/ui/state.js)
-    ↓
-┌─────────────────────────────────────────────────────────┐
-│                    Simulation Layer                      │
-│  ├─ Cluster Topology (src/simulation/cluster.js)        │
-│  ├─ Training Engine (src/simulation/training.js)        │
-│  ├─ Metrics (src/simulation/metrics.js)                 │
-│  └─ Model Config (src/simulation/model.js)              │
-├─────────────────────────────────────────────────────────┤
-│                    Contract Layer                        │
-│  ├─ Parser (src/contracts/parser.js)                    │
-│  ├─ Compiler (src/contracts/compiler.js)                │
-│  ├─ Validator (src/contracts/validator.js)              │
-│  └─ Diagnostics (src/contracts/diagnostics.js)          │
-├─────────────────────────────────────────────────────────┤
-│                    Inference Layer                       │
-│  ├─ Client (src/inference/client.js)                    │
-│  └─ Response (src/inference/response.js)                │
-├─────────────────────────────────────────────────────────┤
-│                   Collaboration Layer                    │
-│  ├─ Channel (src/collaboration/channel.js)              │
-│  ├─ Presence (src/collaboration/presence.js)            │
-│  └─ Events (src/collaboration/events.js)                │
-└─────────────────────────────────────────────────────────┘
-    ↓
-UI Rendering (src/ui/rendering.js, src/ui/logging.js, src/ui/main.js)
-```
-
----
-
-## Simulation Model
-
-The simulation uses mathematically grounded approximations:
-
-| Component | Formula |
-|-----------|---------|
-| **Model Params** | `vocab×hidden + maxSeq×hidden + layers×(12×hidden²+13×hidden) + 2×hidden` ≈ 124M |
-| **Compute/step** | `6 × PARAMS × tokens_per_replica / (312 TFLOPs) × 2.6` |
-| **All-Reduce (Ring)** | `2 × (N-1)/N × grad_bytes / 90 GB/s` |
-| **All-Reduce (Tree)** | `log₂(N)/N × 2.2 × grad_bytes / 90 GB/s` |
-| **All-Reduce (Flat)** | `(N-1)/N × 1.35 × grad_bytes / 90 GB/s` |
-| **Loss decay** | `1.42 + 8.6 × exp(-step / (900 / LR_factor^0.85))` |
-| **LR instability** | Extra noise when `LR > 3.6 × 3e-4` |
-
-**These are simulations, not real measurements.** They approximate the *qualitative behavior* of distributed training for educational and architectural exploration purposes.
-
----
-
-## Contract System
-
-The contract pipeline:
-
-```
-Contract DSL Source
-       ↓
-   Parser
-       ↓
-Parsed Representation (name, fields[], diags[])
-       ↓
-TypeScript Generator → Interface Definition
-       ↓
-Runtime Validator → Diagnostics (errors/warnings)
-       ↓
-Inference Request → Validated Payload → Simulated Response
-```
-
-**Supported types**: `string`, `int`, `float`, `bool`, `any`, `json`, arrays (`[]`), optional (`?`), defaults (`= value`)
-
-**Supported decorators**: `@min(n)`, `@max(n)`, `@range(min,max)`, `@pattern(regex)`, `@enum(v1,v2,...)`, `@maxItems(n)`
-
----
-
-## Collaboration Model
-
-```
-Tab A ──┐
-        ├── BroadcastChannel "tfs-lab" ──→ Peer Discovery
-Tab B ──┘         │
-                  ├── Presence (name, color, focus, activity)
-                  ├── State Sync (hyperparameters, contract)
-                  └── Log Broadcast
-```
-
-- Zero-configuration, works on `localhost` and `file://` (with browser flags)
-- Peer timeout: 5.2 seconds
-- Heartbeat interval: 1.6 seconds
-
----
-
-## Inference Workflow
-
-1. **Write Contract** in DSL editor (top-right panel)
-2. **Compile** → Auto-generates TypeScript interface + diagnostics
-3. **Write Request** in JSON (bottom-right panel) or load sample (valid/invalid)
-4. **Validate & Infer** → Runtime validation against contract
-5. **Response** → Simulated TF Serving response with timings
-
----
-
-## Running Locally
-
-### Option 1: Direct file open (limited collaboration)
 ```bash
-# Open index.html directly in browser
-# Note: BroadcastChannel requires HTTP/HTTPS, not file://
-# Collaboration will not work in this mode
+# Clone the repository
+git clone https://github.com/aymanelmasryael/tf-serving-lab.git
+cd tf-serving-lab
+
+# Option 1: Local HTTP server (full collaboration)
+python3 -m http.server 8080
+# Open http://localhost:8080 in multiple tabs
+
+# Option 2: Direct file open (single-user)
 open index.html
 ```
 
-### Option 2: Local HTTP server (full collaboration)
-```bash
-# Python 3
-python3 -m http.server 8080
+---
 
-# Node.js (npx)
-npx serve .
+## 🏗️ Architecture
 
-# PHP
-php -S localhost:8080
 ```
-Then open `http://localhost:8080` in multiple tabs to test collaboration.
+Browser UI (index.html)
+        │
+        ▼
+┌───────────────────────────────────────────────┐
+│            Application State                  │
+│              (src/ui/state.js)                │
+└───────────────────────────────────────────────┘
+        │
+   ┌────┼──────────────┬──────────────┐
+   ▼    ▼              ▼              ▼
+┌──────────┐  ┌──────────────┐  ┌──────────────┐
+│Simulation│  │  Contracts   │  │Collaboration │
+│  Layer   │  │    Layer     │  │    Layer     │
+├──────────┤  ├──────────────┤  ├──────────────┤
+│model.js  │  │parser.js     │  │channel.js    │
+│training  │  │compiler.js   │  │presence.js   │
+│cluster   │  │validator.js  │  │events.js     │
+│metrics   │  │diagnostics.js│  └──────────────┘
+└──────────┘  └──────────────┘
+   │                 │
+   └────────┬────────┘
+            ▼
+    ┌────────────────┐
+    │   Inference    │
+    │     Layer      │
+    │  (client.js)   │
+    └────────────────┘
+```
+
+For the full architecture breakdown, see [docs/architecture.md](docs/architecture.md).
 
 ---
 
-## Project Structure
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/architecture.md) | Module responsibilities, data flow, collaboration protocol |
+| [Contract System](docs/contract-system.md) | DSL grammar, decorators, parser, validator, diagnostics |
+| [Simulation Model](docs/simulation-model.md) | Formulas for timing, loss, and inference simulation |
+
+---
+
+## 📁 Project Structure
 
 ```
 tf-serving-lab/
-├── index.html                    # Entry point
-├── README.md                     # This file
+├── index.html
+├── README.md
+├── LICENSE
 ├── .gitignore
 ├── src/
-│   ├── ui/
-│   │   ├── styles.css           # All styles (extracted from original)
-│   │   ├── main.js              # Application bootstrap
-│   │   ├── state.js             # State management
-│   │   ├── rendering.js         # DOM rendering
-│   │   ├── logging.js           # Log stream
-│   │   └── utils.js             # Shared utilities
-│   ├── simulation/
-│   │   ├── model.js             # Model configuration & param count
-│   │   ├── training.js          # Training engine & state
-│   │   ├── cluster.js           # Cluster topology rendering
-│   │   └── metrics.js           # Metrics & status strip
-│   ├── contracts/
-│   │   ├── parser.js            # DSL parser
-│   │   ├── compiler.js          # TypeScript generator + highlighter
-│   │   ├── validator.js         # Runtime validator
-│   │   └── diagnostics.js       # Diagnostic rendering
-│   ├── inference/
-│   │   ├── client.js            # Inference request handler
-│   │   └── response.js          # Response generation
-│   └── collaboration/
-│       ├── channel.js           # BroadcastChannel wrapper
-│       ├── presence.js          # Peer presence management
-│       └── events.js            # Demo peer simulation
-├── docs/
-│   ├── architecture.md          # Architecture documentation
-│   ├── contract-system.md       # Contract DSL documentation
-│   └── simulation-model.md      # Simulation formulas documentation
-└── assets/
-    └── screenshots/             # Screenshots (add manually)
+│   ├── ui/             # Main entry, state, rendering, logging
+│   ├── simulation/     # Model, training engine, cluster, metrics
+│   ├── contracts/      # DSL parser, compiler, validator, diagnostics
+│   ├── inference/      # Request handler, response generation
+│   └── collaboration/  # BroadcastChannel, presence, demo peers
+├── docs/               # Technical documentation
+└── assets/             # Logo, preview images
 ```
 
 ---
 
-## Current Limitations
+## 🧪 Experiments to Try
 
-| Limitation | Description |
-|------------|-------------|
-| **No real TensorFlow** | All computation is simulated in JavaScript |
-| **No real GPU** | FLOP calculations are approximations |
-| **No real distributed cluster** | Single-threaded simulation with timing models |
-| **No model checkpointing** | State is in-memory only |
-| **BroadcastChannel only** | No WebRTC/WebSocket fallback for cross-origin |
-| **Single model** | Fixed GPT-2 small architecture (124M params) |
-| **No authentication** | Collaboration is open to any tab on same origin |
+| # | Action | Expected Result |
+|---|--------|-----------------|
+| 1 | Set Replicas = 1 → watch loss | Slower throughput |
+| 2 | Increase Replicas to 16 | Lower scaling efficiency (comm overhead) |
+| 3 | Switch strategy ring → tree | Different all-reduce timing |
+| 4 | Set LR to maximum | Loss instability in chart |
+| 5 | Click invalid → Validate & Infer | 6 contract violations shown |
+| 6 | Open second tab | Peer avatar appears |
+| 7 | Click + demo peer | Simulated collaborators with activity |
 
 ---
 
-## Future Architecture (NOT IMPLEMENTED)
+## 🛠️ Tech Stack
 
+| Layer | Technology |
+|-------|------------|
+| UI | HTML5, CSS3 (Grid + Custom Properties), Vanilla JavaScript ES Modules |
+| Rendering | Canvas 2D API, requestAnimationFrame |
+| Collaboration | BroadcastChannel API |
+| Dependencies | **Zero** — no npm packages, no build step |
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow Conventional Commits:
+
+```bash
+git checkout -b feature/your-feature
+git commit -m "feat(contract): add @email decorator"
+git push origin feature/your-feature
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        TRAINING PLANE                           │
-│  TensorFlow / tf.distribute.Strategy (MirroredStrategy, TPUStrategy) │
-│                           ↓                                     │
-│              Model Checkpoint / Export (SavedModel)             │
-│                           ↓                                     │
-│                      MODEL ARTIFACT                             │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                        SERVING PLANE                            │
-│  TensorFlow Serving (ModelServer, gRPC/REST, batching, versioning) │
-│                           ↓                                     │
-│                     REST :8501  /  gRPC :8500                   │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-                    Inference Clients (this workbench)
-```
-
-**This production backend is NOT currently implemented.** The workbench simulates the *interface* and *workflow* of such a system.
 
 ---
 
-## License
+## 📄 License
 
-MIT License — see [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-## Author
+## 👤 Author
 
-**Ayman Elmasry** — Founder, AEL Digital Studio  
-🌐 [www.aymanelmasry.com](https://www.aymanelmasry.com/) · 📧 [info@aymanelmasry.com](mailto:info@aymanelmasry.com) · 🔗 [aymanelmasry.me](https://aymanelmasry.me/)
+<div align="center">
 
-*Dubai · Egypt · Kuwait*
+**Ayman Elmasry**  
+Visionary · AI Orchestrator · Brand Designer  
+Founder @ **AEL Digital Studio**
+
+📍 Dubai · Egypt · Kuwait
+
+[![Website](https://img.shields.io/badge/Website-aymanelmasry.com-0074FF?style=for-the-badge)](https://www.aymanelmasry.com/)
+[![Portfolio](https://img.shields.io/badge/Portfolio-aymanelmasry.me-0074FF?style=for-the-badge)](https://aymanelmasry.me/)
+[![Email](https://img.shields.io/badge/Email-info@aymanelmasry.com-0074FF?style=for-the-badge)](mailto:info@aymanelmasry.com)
+
+</div>
+
+<div align="center">
+
+**Made with ⚡ by AEL Digital Studio**
+
+</div>
