@@ -2,32 +2,52 @@
 .DS_Store
 .AppleDouble
 .LSOverride
-._*
 
-# Editors / IDEs
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# Node
-node_modules/
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
 npm-debug.log*
+yarn-debug.log*
 yarn-error.log*
 
-# Env
-.env
-.env.*
-
-# Logs / temp
-*.log
+# Temporary files
 *.tmp
 *.temp
-.cache/
+.tmp/
+.temp/
 
-# Build artifacts
+# Build outputs (if any future build step)
 dist/
 build/
+*.min.js
+*.min.css
 
-# Backup of original source — local only
-*.original.html.bak
+# Node (not used currently but standard)
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Testing/coverage
+coverage/
+.nyc_output/
+
+# Misc
+*.orig
+*.rej
