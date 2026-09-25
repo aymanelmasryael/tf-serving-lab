@@ -40,14 +40,8 @@ body{
   backdrop-filter:blur(10px); flex-wrap:wrap;
 }
 .brand{display:flex; align-items:center; gap:12px; min-width:280px; cursor:pointer; user-select:none}
-.brand:hover .logo{box-shadow:0 0 26px rgba(0,116,255,.55), inset 0 0 14px rgba(255,255,255,.12)}
-.logo{
-  width:40px;height:40px;border-radius:10px;display:grid;place-items:center; padding:5px;
-  background:linear-gradient(140deg,#07111f,#0d1830); flex-shrink:0;
-  border:1px solid rgba(0,116,255,.35);
-  box-shadow:0 0 22px rgba(0,116,255,.35), inset 0 0 12px rgba(255,255,255,.06);
-  transition:box-shadow .3s;
-}
+.brand:hover .logo{transform:scale(1.06)}
+.logo{width:44px;height:44px;display:grid;place-items:center;flex-shrink:0;background:transparent;border:none;box-shadow:none;transition:transform .25s ease;}
 .logo svg{display:block;width:100%;height:100%}
 .brand h1{margin:0;font-size:14px;letter-spacing:.01em;color:var(--hi);font-weight:650;line-height:1.25}
 .brand p{margin:0;font-size:10px;color:var(--dim);letter-spacing:.07em;text-transform:uppercase;line-height:1.35}
@@ -271,11 +265,7 @@ pre.code{
 }
 .modal-close:hover{background:rgba(255,255,255,.1); color:#fff}
 .m-head{display:flex; gap:18px; align-items:center; margin-bottom:16px}
-.m-logo{
-  width:74px;height:74px;border-radius:16px;flex-shrink:0;padding:11px;display:grid;place-items:center;
-  background:linear-gradient(140deg,#061020,#0d1830); border:1px solid rgba(0,116,255,.4);
-  box-shadow:0 0 34px rgba(0,116,255,.35), inset 0 0 16px rgba(255,255,255,.05);
-}
+.m-logo{width:74px;height:74px;flex-shrink:0;display:grid;place-items:center;background:transparent;border:none;box-shadow:none;}
 .m-logo svg{display:block;width:100%;height:100%}
 .m-head h2{margin:0 0 5px; font-size:20px; color:#f0f7ff; letter-spacing:-.01em; font-weight:700}
 .m-title{font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--brand); font-weight:700; line-height:1.5}
